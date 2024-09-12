@@ -2,9 +2,6 @@ using Plots            # To use plot
 using GaussQuadrature  # To use legendre
 using SparseArrays     # To use spzeros
 
-# STILL NOT IMPLEMENTED, CHECK:
-# https://github.com/bacarmo/Problema-estacionario-unidimensional/blob/main/Eliptica_1D_vs2.ipynb
-
 
 # Approximates the Integral of a given function
 function gaussian_quadrature(f, ngp)
@@ -108,6 +105,7 @@ function init_Fe_vector(ne, e)
   return Fe
 end
 
+
 # Initializes the F vector
 function init_F_vector(ne)
   h = 1 / ne
@@ -132,27 +130,63 @@ function init_F_vector(ne)
 end
 
 
+# Generalized phi function
+function phi(number, qsi)
+  return [((1 - qsi) / 2), ((1 + qsi) / 2)][number]
+end
+
+
+# Generalized derivative of the phi function
+function d_phi(number, qsi)
+  return [(-1 / 2), (1 / 2)][number]
+end
+
+
+# Converts the interval from [x_i-1 , xi+1] to [-1, 1]
+function qsi_to_x(qsi, i, h)
+  return (h / 2) * (qsi + 1) + x0 + (i - 1)*h 
+end
+
+
+# Computes the error according to ne
+function calc_error(cs, ne)
+  sum = 0
+  h = 1 / ne
+  extended_cs = [cs; 0]
+  EQ = init_EQ_vector(ne)
+  LG = init_LG_matrix(ne)
+
+  # Computes the error 
+  for e in 1:ne
+    sum = sum + gaussian_quadrature((qsi) -> (u(qsi_to_x(qsi, e, h)) - (extended_cs[EQ[LG[1,e]]] * phi(1, qsi)) - (extended_cs[EQ[LG[2,e]]] * phi(2, qsi)))^2, 5)
+  end
+
+  return sqrt(sum * (h / 2))
+end
+
+
 # Plots the exact and inexact graphs, as well as the absolute and relative errors
 function plot_comparisson(ne)
 
-  # Initializes h for a given n
+  # Initializes h
   h = 1 / ne
 
-  # Initializes xs
+  # Defines xs
   xs = zeros(ne - 1)
 
+  # Initializes xs
   for i in 1:ne-1
     xs[i] = h * i
   end
 
-  # Solves the system to find the inexact function ys
+  # Solves the system
   K = init_K_matrix(ne)
   F = init_F_vector(ne)
-  uhs = K \ F  # uhs has size ne-1
+  cs = K \ F
 
   # Includes the boundary conditions in xs and uhs
   xs = [0; xs; 1]
-  uhs = [0; uhs; 0]
+  uhs = [0; cs; 0]
 
   # Getting the plot with the exact function
   plt = plot(u, 0, 1, label = "Expected Function", size=(800, 800))
@@ -179,88 +213,39 @@ function plot_comparisson(ne)
 end
 
 
-
-# Plots the errors according to h varying from a to b
+# Computes the error for a system of ne elements
 function error_of_system(ne)
-
-  # Initializes h for a given n
-  h = 1 / ne
-
-  # Initializes xs and us
-  xs = zeros(ne)
-  us = zeros(ne)
-
-  # Initializes us with the exact values
-  for i in 1:ne
-    us[i] = u(i * h)
-    xs[i] = h*i
-  end
 
   # Solves the linear system
   K = init_K_matrix(ne)
   F = init_F_vector(ne)
   cs = K \ F
 
-  # Includes the boundary conditions
-  uhs = [0; cs; 0]
-
-  # Computes the maximum error
+  # Computes the error
   error = calc_error(cs, ne)
 
   return error
 end
 
 
-# Generalizes the phi function
-function phi(number, qsi)
-  return [((1 - qsi) / 2), ((1 + qsi) / 2)][number]
-end
-
-
-# Generalizes the derivative of the phi function
-function d_phi(number, qsi)
-  return [(-1 / 2), (1 / 2)][number]
-end
-
-
-# Converts the interval from [x_i-1 , xi+1] to [-1, 1]
-function qsi_to_x(qsi, i, h)
-  return (h / 2) * (qsi + 1) + x0 + (i - 1)*h 
-end
-
-
-# Computes the error according to ne
-function calc_error(cs, ne)
-  sum = 0
-  h = 1 / ne
-  P, W = legendre(5)
-  extended_cs = [cs; 0]
-  EQ = init_EQ_vector(ne)
-  LG = init_LG_matrix(ne)
-
-  for e in 1:ne
-    for j in 1:5
-      sum = sum + W[j] * (u(qsi_to_x(P[j], e, h)) - (extended_cs[EQ[LG[1,e]]] * phi(1, P[j])) - (extended_cs[EQ[LG[2,e]]] * phi(2, P[j])))^2
-    end
-  end
-
-  return sqrt(sum * (h / 2))
-end
-
-
 # Plots the graph of errors according to the varying of n
 function error_analysis()
-  # Initializing the vectors
+  # Initializes the vectors
   hs = zeros(b - a + 1)
   hs2 = zeros(b - a + 1)
   errors = zeros(b - a + 1)
 
   # Computes the errors varying according to the variation of h
   for i in a:b
+    # Initializes ne and h
     ne = (1 << i) - 1
     h = 1 / ne
+
+    # Stores h and h^2 in lists
     hs[i-a+1] = h
     hs2[i-a+1] = h * h
+
+    # Stores the error in a list
     error = error_of_system(ne)
     errors[i-a+1] = error
   end
@@ -271,20 +256,22 @@ function error_analysis()
 
   # Saves the graph in a png file
   savefig("Galerkin-generic-ode-errors.png")
-
-  # Plots a comparison graph containing errors and an approximation comparison with ne = 2^{b} - 1
-  plot_comparisson((1 << b) - 1)
 end
+
 
 # Variables
 alpha = 1                               # constant value
 beta = 1                                # constant value
 gamma = 1                               # constant value
-u = (x) -> sin(pi * x)
+u = (x) -> sin(pi * x)                  # function we are trying to approximate (we have it defined here just to compute the error)
 f = (x) -> alpha*pi^2 * sin(pi*x) + beta*sin(pi*x) + gamma*pi*cos(pi*x)
 x0 = 0                                  # starting point
 a = 1                                   # lower limit to test the error varying
-b = 17                                  # upper limit to test the error varying
+b = 14                                  # upper limit to test the error varying
+
 
 # Plots the error analysis
 error_analysis()
+
+# Plots a comparison graph containing errors and an approximation comparison with ne as argument
+plot_comparisson(5)
