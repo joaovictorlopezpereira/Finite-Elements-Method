@@ -106,7 +106,7 @@ function init_F_vector(f, ne, EQ, LG, m)
   for e in 1:ne
     Fe = init_Fe_vector(f, ne, e)
     for a in 1:2
-      i = EQoLG[a,e]
+      i = EQ[LG[a,e]]
       F[i] += Fe[a]
     end
   end
@@ -146,16 +146,12 @@ function gauss_error(u, cs, ne, EQ, LG)
   return sqrt(sum * (h / 2))
 end
 
-# Plots a gif with an approximate comparison to the exact function
-function plot_comparisson(ne, alpha, beta, gamma, T, f, u, u0)
-  # Initializing variables
-  nt = ne
+# Solves the system and returns Cns
+function solve_system(ne, tau, alpha, beta, gamma, T, f, u0)
+  # Initializing variables, matrices and vectors
   h = 1 / ne
-  tau = h
   t = 0:tau:T
   N = length(t) - 1
-
-  # Initializing Matrices and Vectors
   LG = init_LG_matrix(ne)
   EQ, m = init_EQ_vector_and_m(ne)
   K = init_K_matrix(ne, EQ, LG, alpha, beta, gamma, m)
@@ -165,113 +161,127 @@ function plot_comparisson(ne, alpha, beta, gamma, T, f, u, u0)
   LU = lu(A)
   Cn = zeros(m)
   Cn_1 = zeros(m)
-
-  Cn_1 .= u0.(h:h:1-h)
+  Cns = Vector{Vector{Float64}}(undef, N+1)
 
   # Iterations for computing u by varying n (time)
-  anim = @animate for n in 0:nt
+  for n in 0:N
     if (n == 0)
-      Cn_1 .= u0.(h:h:1-h)
+      Cn .= u0.(h:h:1-h)
+      Cn_1 = Cn
+      Cns[n+1] = Cn
     else
       F = init_F_vector((x) -> f(x, (n*tau - tau/2)), ne, EQ, LG, m)
       Cn = LU \ (B * Cn_1 + tau * F)
-      Cn_1 .= Cn
+      Cn_1 = Cn
+      Cns[n+1] = Cn
     end
-
-    # Plotting the approximate function and exact to compare
-    # Change the ylims upper limit according to the example
-    plt = plot(label = "Aproximating U(x,t) using the Finite Elements Method", 
-    xlabel = "x", size=(800, 800), xlim = (0, 1), ylims = (0, 0.15)) 
-    plot!(plt, (x) -> u(x, t[n+1]), label = "Exact Function", color =:blue)
-    plot!(plt, 0:h:1, [0 ; Cn_1; 0], label = "Approximation", linestyle =:dash, markershape=:circle, color =:red)
   end
-
-  gif(anim, "finite-elements-method-plot-comparisson.gif", fps=1)
+  return Cns
 end
 
-# Computes the errors from a system of ne points and returns the biggest error
-function error_from_system(ne, alpha, beta, gamma, T, f, u, u0)
-  # Initializing variables
-  nt = ne
+# Plots a gif with an approximate comparison to the exact function
+function plot_comparisson(ne, tau, fr, alpha, beta, gamma, T, f, u, u0)
+  # Initializes variables and arrays
   h = 1 / ne
-  tau = h
-  xs = 0:h:1
   t = 0:tau:T
   N = length(t) - 1
 
-  # Initializing Matrices
+  Cns = solve_system(ne, tau, alpha, beta, gamma, T, f, u0)
+
+  # Iterating for plotting the approximate and exact function
+  anim = @animate for n in 0:N
+    Cn = Cns[n+1]
+    plt = plot(label = "Aproximating u(x,t)", 
+    xlabel = "x", size=(800, 800), xlim = (0, 1), ylims = (0, 0.15)) 
+    plot!(plt, (x) -> u(x, t[n+1]), label = "Exact Function", color =:blue)
+    plot!(plt, 0:h:1, [0 ; Cn; 0], label = "Approximation", linestyle =:dash, markershape=:circle, color =:red)
+  end
+
+  gif(anim, "plot-comparisson.gif", fps = fr)
+end
+
+# Computes the errors from a system of ne points and returns the maximum error
+function error_from_system(ne, tau, alpha, beta, gamma, T, f, u, u0)
+  # Initializing variables
+  h = 1 / ne
+  t = 0:tau:T
+  N = length(t) - 1
+
+  # Initializing matrices and vectors
   LG = init_LG_matrix(ne)
   EQ, m = init_EQ_vector_and_m(ne)
-  K = init_K_matrix(ne, EQ, LG, alpha, beta, gamma, m)
-  M = init_K_matrix(ne, EQ, LG, 0, 1, gamma, m)
-  A = M + ((tau / 2) * K)
-  B = M - ((tau / 2) * K)
-  LU = lu(A)
+  errors = zeros(N+1)
 
-  # Initializing Vectors 
-  Cn = zeros(m)
-  Cn_1 = zeros(m)
-  errors = zeros(nt+1)
+  Cns = solve_system(ne, tau, alpha, beta, gamma, T, f, u0)
 
-  # Iterations for computing u by varying n (time)
-  anim = @animate for n in 0:nt
+  for n in 0:N
     if (n == 0)
-      Cn_1 .= u0.(h:h:1-h)
-      errors[1] = gauss_error(u0, Cn_1, ne, EQ, LG)
+      errors[n+1] = gauss_error(u0, Cns[n+1], ne, EQ, LG)
     else
-      F = init_F_vector((x) -> f(x, (n*tau - tau/2)), ne, EQ, LG, m)
-      Cn = LU \ (B * Cn_1 + tau * F)
-      errors[n+1] = gauss_error((x) -> u(x, t[n+1]), Cn, ne, EQ, LG)
-      Cn_1 .= Cn
+      errors[n+1] = gauss_error((x) -> u(x, t[n+1]), Cns[n+1], ne, EQ, LG)
     end
   end
 
   return maximum(errors)
-
 end
 
 # Plots the errors according to the variation of h = tau
-function plot_error_convergence(alpha, beta, gamma, T, f, u, u0, a, b)
-  errors = zeros(b-a+1)
-  hs = zeros(b-a+1)
+function plot_error_convergence(lb, ub, alpha, beta, gamma, T, f, u, u0)
+  vec_ne = [2^i for i in lb:ub]
+  hs = 1 ./ vec_ne
+  vec_tau = hs
 
-  for i in a:b
-    println("chamando o caso $i")
-    hs[i-a+1] = 1 / 2^i
-    errors[i-a+1] = error_from_system(2^i, alpha, beta, gamma, T, f, u, u0)
+  function error_convergence(lb, ub, vec_ne, vec_tau, alpha, beta, gamma, T, f, u, u0)
+    errors = zeros(ub-lb+1)
+
+    for i in lb:ub
+      errors[i-lb+1] = error_from_system(vec_ne[i-lb+1], vec_tau[i-lb+1], alpha, beta, gamma, T, f, u, u0)
+    end
+
+    return errors
+  end
+
+  @time begin
+    errors = error_convergence(lb, ub, vec_ne, vec_tau, alpha, beta, gamma, T, f, u, u0)
   end
 
   # Plots the errors in a log scale
-  plot(hs, errors, seriestype = :scatter, label = "Graph found by varying #h and computing the error", 
+  plot(hs, errors, seriestype = :scatter, label = "Error convergence", 
   xlabel = "h", ylabel = "error", size=(800, 800), xscale=:log10, yscale=:log10, 
   markercolor = :blue)
   plot!(hs, errors, seriestype = :line, label = "", linewidth = 2, linecolor = :blue)
   plot!(hs, hs.^2, seriestype = :line, label = "h^2", linewidth = 2, linecolor = :red)
 
   # Saves the graph in a png file
-  savefig("finite-elements-method-error-convergence.png")
+  savefig("error-convergence.png")
 
 end
 
 
-# Variables for error convergence
-a = 1
-b = 5
+# Variables for plot_error_convergence
+lb = 1    # lower-bound limit to 2^lb - 1
+ub = 5    # upper-bound limit to 2^ub - 1
 
-# Variables
-alpha  = 1                               # constant value
-beta   = 1                               # constant value
-gamma  = 0                               # constant value
-T      = 1                               # constant value
+# Variables for plot_comparisson
+ne = 5
+tau = 1/8
+frate = 5
+
+# Constants
+alpha  = 1
+beta   = 1
+gamma  = 0
+T      = 1
 
 # Functions
-u  = (x,t) -> sin(π * x) * (exp(-1 * t) / π^2)
+u  = (x,t) -> sin(π * x) * exp(-1 * t) / π^2
 u0 = (x)   -> sin(π * x) / π^2
 f  = (x,t) -> sin(π * x) * ((-1 + alpha * π^2 + beta) * exp(-1 * t) / π^2)
 
-# Plots a gif for visualizing the results
-plot_comparisson(4, alpha, beta, gamma, T, f, u, u0)
 
-# Plots the error convergence analysis
-plot_error_convergence(alpha, beta, gamma, T, f, u, u0, a, b)
+# Plots a png for analysing the error convergence
+plot_error_convergence(lb, ub, alpha, beta, gamma, T, f, u, u0)
+
+# Plots a gif for visualizing the results
+plot_comparisson(ne, tau, frate, alpha, beta, gamma, T, f, u, u0)
 
