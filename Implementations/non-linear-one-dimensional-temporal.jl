@@ -60,8 +60,8 @@ function init_K_matrix(ne, EQ, LG, alpha, beta, gamma, m)
 
     for a in 1:2
       for b in 1:2
-        Ke[a,b] = (alpha * 2 / h) * gaussian_quadrature((qsi) -> d_phi(a, qsi) * d_phi(b, qsi), 2) + 
-                  (beta * h / 2) * gaussian_quadrature((qsi) -> phi(a, qsi) * phi(b, qsi), 2) + 
+        Ke[a,b] = (alpha * 2 / h) * gaussian_quadrature((qsi) -> d_phi(a, qsi) * d_phi(b, qsi), 2) +
+                  (beta * h / 2) * gaussian_quadrature((qsi) -> phi(a, qsi) * phi(b, qsi), 2) +
                             gamma * gaussian_quadrature((qsi) -> d_phi(b, qsi) * phi(a, qsi), 2)
       end
     end
@@ -84,7 +84,7 @@ function init_K_matrix(ne, EQ, LG, alpha, beta, gamma, m)
 
   # removes the last line and column
   return K[1:m, 1:m]
-end 
+end
 
 # Initializes the F vector
 function init_F_vector(f, ne, EQ, LG, m)
@@ -159,8 +159,9 @@ function init_C0_vector(option, u0, u0x, ne, EQ, LG, alpha, beta, gamma, m)
     return A \ b
 
   elseif (option == 4)
+    h = 1 / ne
     K = init_K_matrix(ne, EQ, LG, alpha, beta, gamma, m)
-    b = (alpha .* init_C0_3rd_option_vector(u0x, ne, EQ, LG, m)) + (beta .* init_F_vector(u0, ne, EQ, LG, m))
+    b = (alpha .* init_C0_3rd_option_vector(u0x, ne, EQ, LG, m)) + (beta .* init_F_vector(u0, ne, EQ, LG, m)) + (gamma .* init_F_vector(u0x, ne, EQ, LG, m))
     return K \ b
 
   else
@@ -208,7 +209,7 @@ end
 
 # Converts the interval from [x_i-1 , xi+1] to [-1, 1]
 function qsi_to_x(qsi, i, h)
-  return (h / 2) * (qsi + 1) + 0 + (i - 1)*h 
+  return (h / 2) * (qsi + 1) + 0 + (i - 1)*h
 end
 
 # Solves the system and returns Cns
@@ -279,8 +280,8 @@ function plot_comparisson(ne, tau, fr, alpha, beta, gamma, T, f, u, u0, u0x, g, 
   # Iterating for plotting the approximate and exact function
   anim = @animate for n in 0:N
     Cn = Cns[n+1]
-    plt = plot(label = "Aproximating u(x,t)", 
-    xlabel = "x", size=(800, 800), xlim = (0, 1), ylims = (0, 0.15)) 
+    plt = plot(label = "Aproximating u(x,t)",
+    xlabel = "x", size=(800, 800), xlim = (0, 1), ylims = (0, 0.15))
     plot!(plt, (x) -> u(x, t[n+1]), label = "Exact Function", color =:blue)
     plot!(plt, 0:h:1, [0 ; Cn; 0], label = "Approximation", linestyle =:dash, markershape=:circle, color =:red)
   end
@@ -299,7 +300,7 @@ function error_from_system(ne, tau, alpha, beta, gamma, T, f, u, u0, u0x, g, C0o
     # Incluiding 0 so that the EQ-LG will not consider the first and the last phi function
     ext_cs = [cs ; 0]
 
-    # Computing the error 
+    # Computing the error
     for e in 1:ne
       sum = sum + gaussian_quadrature((qsi) -> (u(qsi_to_x(qsi, e, h)) - (ext_cs[EQ[LG[1,e]]] * phi(1, qsi)) - (ext_cs[EQ[LG[2,e]]] * phi(2, qsi)))^2, 5)
     end
@@ -340,7 +341,6 @@ function plot_error_convergence(lb, ub, alpha, beta, gamma, T, f, u, u0, u0x, g,
     errors = zeros(ub-lb+1)
 
     for i in lb:ub
-      display(i)
       errors[i-lb+1] = error_from_system(vec_ne[i-lb+1], vec_tau[i-lb+1], alpha, beta, gamma, T, f, u, u0, u0x, g, C0option)
     end
 
@@ -350,8 +350,8 @@ function plot_error_convergence(lb, ub, alpha, beta, gamma, T, f, u, u0, u0x, g,
   errors = error_convergence(lb, ub, vec_ne, vec_tau, alpha, beta, gamma, T, f, u, u0, u0x, g, C0option)
 
   # Plots the errors in a log scale
-  plot(hs, errors, seriestype = :scatter, label = "Error convergence", 
-  xlabel = "h", ylabel = "error", size=(800, 800), xscale=:log10, yscale=:log10, 
+  plot(hs, errors, seriestype = :scatter, label = "Error convergence",
+  xlabel = "h", ylabel = "error", size=(800, 800), xscale=:log10, yscale=:log10,
   markercolor = :blue)
   plot!(hs, errors, seriestype = :line, label = "", linewidth = 2, linecolor = :blue)
   plot!(hs, hs.^2, seriestype = :line, label = "h^2", linewidth = 2, linecolor = :red)
@@ -369,7 +369,7 @@ function plot_approximation(ne, tau, fr, alpha, beta, gamma, T, f, u0, u0x, g, C
   # Iterating for plotting the approximate function
   anim = @animate for n in 1:length(Cns)
     Cn = Cns[n]
-    plt = plot(label = "Aproximating u(x,t)", 
+    plt = plot(label = "Aproximating u(x,t)",
     xlabel = "x", size=(800, 800), xlim = (0, 1), ylims = (0, 0.15))
     plot!(plt, 0:h:1, [0 ; Cn; 0], label = "Approximation", linestyle =:dash, markershape=:circle, color =:red)
   end
@@ -381,12 +381,12 @@ end
 
 # Variables for plot_error_convergence
 lb = 1    # lower-bound limit to 2^lb - 1
-ub = 10    # upper-bound limit to 2^ub - 1
+ub = 5    # upper-bound limit to 2^ub - 1
 
 # Variables for plot_comparisson
-ne = 5
+ne = 4
 tau = 1/8
-frate = 5
+frate = 4
 
 # Constants
 alpha  = 1
@@ -395,12 +395,20 @@ gamma  = 0
 T      = 1
 
 # Functions
+# u   = (x,t) -> sin(π * x) * exp(-1 * t) / π^2
+# u0  = (x)   -> sin(π * x) / π^2
+# u0x = (x)   -> cos(π * x) / π
+# f   = (x,t) -> sin(π * x) * ((-1 + alpha * π^2 + beta) * exp(-1 * t) / π^2) + g(u(x,t))
+# g   = (s)   -> s^3 - 2 * s
+
 u   = (x,t) -> sin(π * x) * exp(-1 * t) / π^2
 u0  = (x)   -> sin(π * x) / π^2
 u0x = (x)   -> cos(π * x) / π
-f   = (x,t) -> sin(π * x) * ((-1 + alpha * π^2 + beta) * exp(-1 * t) / π^2) + g(u(x,t))
+ux  = (x,t) -> cos(π * x) * exp(-1 * t) / π
+uxx = (x,t) -> sin(π * x) * -1 * exp(-1 * t)
+ut  = (x,t) -> sin(π * x) * -1 * exp(-1 * t) / π^2
 g   = (s)   -> s^3 - 2 * s
-
+f   = (x,t) -> ut(x,t) + (-1 * alpha * uxx(x,t)) + (gamma * ux(x,t)) + (beta * u(x,t)) + g(u(x,t))
 
 # Saves a png for analysing the error convergence
 plot_error_convergence(lb, ub, alpha, beta, gamma, T, f, u, u0, u0x, g, 1)
