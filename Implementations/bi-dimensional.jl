@@ -20,16 +20,16 @@ function gaussian_quadrature(f, ngp)
 end
 
 # Initializes the Fe vector
-function init_Fe_vector(f, nx1, nx2, pe1, pe2)
+function init_Fe_vector(f, Nx1, Nx2, pe1, pe2)
   Fe = zeros(4)
-  h1 = 1 / nx1
-  h2 = 1 / nx2
+  h1 = 1 / Nx1
+  h2 = 1 / Nx2
   ngp = 5
 
   for a in 1:4
-    Fe[a] = h1 * h2 / 4 * gaussian_quadrature((xi2) -> 
-                          gaussian_quadrature((xi1) -> f(x(xi1, xi2, 1, h1, h2, pe1, pe2), 
-                                                         x(xi1, xi2, 2, h1, h2, pe1, pe2)) * 
+    Fe[a] = h1 * h2 / 4 * gaussian_quadrature((xi2) ->
+                          gaussian_quadrature((xi1) -> f(x(xi1, xi2, 1, h1, h2, pe1, pe2),
+                                                         x(xi1, xi2, 2, h1, h2, pe1, pe2)) *
                                           phi(a, xi1, xi2), ngp), ngp)
   end
 
@@ -37,19 +37,19 @@ function init_Fe_vector(f, nx1, nx2, pe1, pe2)
 end
 
 # Initializes the Ke matrix
-function init_Ke_matrix(alpha, beta, nx1, nx2)
+function init_Ke_matrix(alpha, beta, Nx1, Nx2)
   Ke = zeros(4,4)
-  h1 = 1 / nx1
-  h2 = 1 / nx2
+  h1 = 1 / Nx1
+  h2 = 1 / Nx2
   ngp = 2
 
   for a in 1:4
     for b in 1:4
-      Ke[a,b] = (alpha * h2 / h1)    * gaussian_quadrature((xi2) -> 
+      Ke[a,b] = (alpha * h2 / h1)    * gaussian_quadrature((xi2) ->
                                        gaussian_quadrature((xi1) -> d_phi(b, xi1, xi2, 1) * d_phi(a, xi1, xi2, 1), ngp), ngp) +
-                (alpha * h1 / h2)    * gaussian_quadrature((xi2) -> 
+                (alpha * h1 / h2)    * gaussian_quadrature((xi2) ->
                                        gaussian_quadrature((xi1) -> d_phi(b, xi1, xi2, 2) * d_phi(a, xi1, xi2, 2), ngp), ngp) +
-                (beta * h1 * h2 / 4) * gaussian_quadrature((xi2) -> 
+                (beta * h1 * h2 / 4) * gaussian_quadrature((xi2) ->
                                        gaussian_quadrature((xi1) ->   phi(b, xi1, xi2)    *   phi(a, xi1, xi2),    ngp), ngp)
     end
   end
@@ -67,7 +67,7 @@ end
 
 # Derivative of the phi function
 function d_phi(a, xi1, xi2, dxi)
-  [[((-1 / 4) * (1 - xi2)), 
+  [[((-1 / 4) * (1 - xi2)),
     (( 1 / 4) * (1 - xi2)),
     (( 1 / 4) * (1 + xi2)),
     ((-1 / 4) * (1 + xi2))
@@ -80,7 +80,7 @@ end
 
 # Converts the interval
 function x(xi, eta, num, h1, h2, pe1, pe2)
-  return [(h1 / 2) * (xi + 1) + pe1; 
+  return [(h1 / 2) * (xi + 1) + pe1;
           (h2 / 2) * (eta + 1) + pe2][num]
 end
 
@@ -109,7 +109,7 @@ end
 # Initializes the EQ Vector
 function init_EQ_vector_and_m(nx1, nx2)
   m = (nx1 - 1) * (nx2 -1)
-  EQ = zeros(nx2+1, nx1+1)
+  EQ = fill(0, (nx2+1, nx1+1))
 
   # Initializes the border elements
   for i in 1:nx1+1
@@ -130,19 +130,20 @@ function init_EQ_vector_and_m(nx1, nx2)
     end
   end
 
-  return EQ, m
+  return cat(EQ'..., dims=1), m
 end
 
-# Initializes the K matrix NOTWORKING
-function init_K_matrix(alpha, beta, nx1, nx2, m, EQ, LG)
+# Initializes the K matrix
+function init_K_matrix(alpha, beta, Nx1, Nx2, m, EQ, LG)
   K = spzeros(m+1, m+1)
-  Ke = init_Ke_matrix(alpha, beta, nx1, nx2)
+  Ke = init_Ke_matrix(alpha, beta, Nx1, Nx2)
+  ne = Nx1 * Nx2
 
-  for e in 1:m
-    for a in 1:4
-      i = Int(EQ[LG[a, e]])
-      for b in 1:4
-        j = Int(EQ[LG[b, e]])
+  for e in 1:ne
+    for b in 1:4
+      j = EQ[LG[b, e]]
+      for a in 1:4
+        i = EQ[LG[a, e]]
         K[i,j] += Ke[a,b]
       end
     end
@@ -151,12 +152,54 @@ function init_K_matrix(alpha, beta, nx1, nx2, m, EQ, LG)
   return K[1:end-1, 1:end-1]
 end
 
-nx1 = 4
-nx2 = 3
+# Initializes the F vector
+function init_F_vector(f, Nx1, Nx2, m, EQ, LG)
+  F = zeros(m+1)
+  h1 = 1 / Nx1
+  h2 = 1 / Nx2
+
+  for j in 1:Nx2
+    pe2 = (j - 1) * h2
+    for i in 1:Nx1
+      pe1 = (i - 1) * h1
+      Fe = init_Fe_vector(f, Nx1, Nx2, pe1, pe2)
+      e = (j - 1) * Nx1 + i
+      for a in 1:4
+        F[EQ[LG[a,e]]] += Fe[a]
+      end
+    end
+  end
+
+  return F[1: end-1]
+end
+
+# Solves the system
+function solve_system(alpha, beta, Nx1, Nx2, f)
+  EQ, m = init_EQ_vector_and_m(Nx1, Nx2)
+  LG = init_LG_matrix(Nx1, Nx2)
+  K = init_K_matrix(alpha, beta, Nx1, Nx2, m, EQ, LG)
+  F = init_F_vector(f, Nx1, Nx2, m, EQ, LG)
+  C = K \ F
+  return C
+end
+
+# Input data
 alpha = 1
 beta = 1
-EQ, m = init_EQ_vector_and_m(nx1, nx2)
-LG = init_LG_matrix(nx1, nx2)
-K = init_K_matrix(alpha, beta, nx1, nx2, m, EQ, LG)
+Nx1 = 4
+Nx2 = 4
 
-display(K)
+u     = (x1,x2) -> sin(pi * x1) * sin(pi * x2) 
+ux1x1 = (x1,x2) -> -1 * pi^2 * sin(pi * x1) * sin(pi * x2)
+ux2x2 = (x1,x2) -> -1 * pi^2 * sin(pi * x1) * sin(pi * x2)
+f     = (x1,x2) -> (-1 * alpha * ux1x1(x1,x2)) + (-1 * alpha * ux2x2(x1,x2)) + beta * u(x1,x2)
+
+# Testing 
+EQ, m = init_EQ_vector_and_m(Nx1, Nx2)
+LG = init_LG_matrix(Nx1, Nx2)
+K = init_K_matrix(alpha, beta, Nx1, Nx2, m, EQ, LG)
+F = init_F_vector(f, Nx1, Nx2, m, EQ, LG)
+
+C = K \ F
+
+display(C)
