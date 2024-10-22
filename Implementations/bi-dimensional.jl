@@ -183,23 +183,38 @@ function solve_system(alpha, beta, Nx1, Nx2, f)
   return C
 end
 
+# Plots the approximation found
+function plot_approximation(alpha, beta, Nx1, Nx2, f)
+
+  # Initializes the axes and computes the temperatures (incluiding the boundary condition)
+  C_in_plane = vcat(zeros(1, Nx2+1), hcat(zeros(Nx1-1, 1), reshape(solve_system(alpha, beta, Nx1, Nx2, f), Nx1-1, Nx2-1), zeros(Nx1-1, 1)), zeros(1, Nx2+1))
+  ext_xs1 = [i * 1/Nx1 for i in 0:Nx1]
+  ext_xs2 = [i * 1/Nx2 for i in 0:Nx2]
+
+  # heatmap(C_in_plane, color=:thermal, title="approximation")
+
+  #surface(ext_xs1, ext_xs2, C_in_plane, color=:thermal, alpha=0.5, title="Temperaturas no Plano 3D", xlabel="X", ylabel="Y", zlabel="Temperaturas")
+
+  # wireframe(ext_xs1, ext_xs2, C_in_plane, color=:thermal, title="Temperaturas no Plano 3D",
+  # xlabel="X", ylabel="Y", zlabel="Temperaturas")
+
+  # Plots the approximation
+  wireframe(ext_xs1, ext_xs2, C_in_plane, linecolor=:black, lw=1, n=5, size=(500,500))
+  surface!(ext_xs1, ext_xs2, C_in_plane, color=:thermal, alpha=0.5, title="Approximation found for u(x1, x2)", xlabel="X", ylabel="Y", zlabel="Temperatures", n=5)
+
+  savefig("approximation_found.png")
+end
+
+
 # Input data
 alpha = 1
 beta = 1
-Nx1 = 4
-Nx2 = 4
+Nx1 = 40
+Nx2 = 40
 
-u     = (x1,x2) -> sin(pi * x1) * sin(pi * x2) 
+u     = (x1,x2) -> sin(pi * x1) * sin(pi * x2)
 ux1x1 = (x1,x2) -> -1 * pi^2 * sin(pi * x1) * sin(pi * x2)
 ux2x2 = (x1,x2) -> -1 * pi^2 * sin(pi * x1) * sin(pi * x2)
 f     = (x1,x2) -> (-1 * alpha * ux1x1(x1,x2)) + (-1 * alpha * ux2x2(x1,x2)) + beta * u(x1,x2)
 
-# Testing 
-EQ, m = init_EQ_vector_and_m(Nx1, Nx2)
-LG = init_LG_matrix(Nx1, Nx2)
-K = init_K_matrix(alpha, beta, Nx1, Nx2, m, EQ, LG)
-F = init_F_vector(f, Nx1, Nx2, m, EQ, LG)
-
-C = K \ F
-
-display(C)
+plot_approximation(alpha, beta, Nx1, Nx2, f)
