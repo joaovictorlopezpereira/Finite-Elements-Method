@@ -187,11 +187,11 @@ end
 function plot_approximation(alpha, beta, Nx1, Nx2, f)
 
   # Initializes the axes and computes the temperatures (incluiding the boundary condition)
-  C_in_plane = vcat(zeros(1, Nx2+1), hcat(zeros(Nx1-1, 1), reshape(solve_system(alpha, beta, Nx1, Nx2, f), Nx1-1, Nx2-1), zeros(Nx1-1, 1)), zeros(1, Nx2+1))
+  C_in_plane = vcat(zeros(1, Nx2+1), hcat(zeros(Nx1-1, 1), reshape(solve_system(alpha, beta, Nx1, Nx2, f), Nx1-1, Nx2-1), zeros(Nx1-1, 1)), zeros(1, Nx2+1))'
   ext_xs1 = [i * 1/Nx1 for i in 0:Nx1]
   ext_xs2 = [i * 1/Nx2 for i in 0:Nx2]
 
-  # heatmap(C_in_plane, color=:thermal, title="approximation")
+  #heatmap(C_in_plane, color=:thermal, title="approximation")
 
   #surface(ext_xs1, ext_xs2, C_in_plane, color=:thermal, alpha=0.5, title="Temperaturas no Plano 3D", xlabel="X", ylabel="Y", zlabel="Temperaturas")
 
@@ -209,8 +209,8 @@ end
 # Input data
 alpha = 1
 beta = 1
-Nx1 = 40
-Nx2 = 40
+Nx1 = 20
+Nx2 = 3
 
 u     = (x1,x2) -> sin(pi * x1) * sin(pi * x2)
 ux1x1 = (x1,x2) -> -1 * pi^2 * sin(pi * x1) * sin(pi * x2)
