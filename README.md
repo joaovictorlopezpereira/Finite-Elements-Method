@@ -6,4 +6,4 @@ I must acknowledge that much of the inspiration and learning came from the repos
 
 You can check my final project at [FiniteElements2dDirichlet.jl](https://github.com/joaovictorlopezpereira/FiniteElements2dDirichlet.jl).
 
-Any additional bibliography used is cited in the pdf files.
+Any additional bibliography used is cited in the ``.pdf`` files.
